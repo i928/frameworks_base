@@ -47,6 +47,7 @@ import com.android.systemui.qs.tiles.impl.wifi.domain.interactor.WifiTileUserAct
 import com.android.systemui.qs.tiles.impl.wifi.domain.model.WifiTileModel
 import com.android.systemui.qs.tiles.impl.wifi.ui.mapper.WifiTileMapper
 import com.android.systemui.statusbar.pipeline.shared.ui.model.SignalIcon
+import com.android.systemui.statusbar.policy.KeyguardStateController
 import javax.inject.Inject
 import kotlinx.coroutines.launch
 
@@ -55,6 +56,7 @@ class WifiTile
 @Inject
 constructor(
     private val host: QSHost,
+    keyguardStateController: KeyguardStateController,
     private val uiEventLogger: QsEventLogger,
     @Background private val backgroundLooper: Looper,
     @Main private val mainHandler: Handler,
@@ -69,7 +71,7 @@ constructor(
     private val userActionInteractor: WifiTileUserActionInteractor,
     private val internetDetailsViewModelFactory: InternetDetailsViewModel.Factory,
 ) :
-    QSTileImpl<QSTile.State?>(
+    SecureQSTile<QSTile.State?>(
         host,
         uiEventLogger,
         backgroundLooper,
@@ -79,6 +81,7 @@ constructor(
         statusBarStateController,
         activityStarter,
         qsLogger,
+        keyguardStateController,
     ) {
 
     private lateinit var tileState: QSTileState
@@ -98,7 +101,10 @@ constructor(
         return QSTile.State().apply { state = Tile.STATE_INACTIVE }
     }
 
-    override fun handleClick(expandable: Expandable?) {
+    override fun handleClick(expandable: Expandable?, keyguardShowing: Boolean) {
+        if (checkKeyguard(expandable, keyguardShowing)) {
+              return
+          }
         lifecycle.coroutineScope.launch { userActionInteractor.handleClick(expandable) }
     }
 

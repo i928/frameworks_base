@@ -28,8 +28,6 @@ import android.widget.ListAdapter;
 
 import androidx.constraintlayout.helper.widget.Flow;
 
-import com.android.systemui.statusbar.BlurUtils;
-
 /**
  * Creates a customized Dialog for displaying the Shut Down and Restart actions.
  */
@@ -38,8 +36,7 @@ public class GlobalActionsPowerDialog {
     /**
      * Create a dialog for displaying Shut Down and Restart actions.
      */
-    public static Dialog create(@NonNull Context context, ListAdapter adapter,
-            BlurUtils blurUtils) {
+    public static Dialog create(@NonNull Context context, ListAdapter adapter) {
         ViewGroup listView = (ViewGroup) LayoutInflater.from(context).inflate(
                 com.android.systemui.res.R.layout.global_actions_power_dialog_flow, null);
 
@@ -76,16 +73,6 @@ public class GlobalActionsPowerDialog {
                 com.android.systemui.res.R.drawable.global_actions_lite_background,
                 context.getTheme()));
         window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
-        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-        if (blurUtils.supportsBlursOnWindows()) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
-            int blurBehindRadius = context.getResources()
-                    .getDimensionPixelSize(com.android.systemui.res.R.dimen.max_window_blur_radius);
-            window.getAttributes().setBlurBehindRadius(blurBehindRadius);
-            window.setDimAmount(0.54f);
-        } else {
-            window.setDimAmount(0.88f);
-        }
 
         return dialog;
     }

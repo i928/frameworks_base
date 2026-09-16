@@ -43,27 +43,23 @@ import com.android.systemui.keyguard.ui.transitions.BlurConfig
 import com.android.systemui.res.R
 import java.io.PrintWriter
 import javax.inject.Inject
-import kotlinx.coroutines.flow.Flow
 
 @SysUISingleton
 open class BlurUtils
 @Inject
 constructor(
     @Main resources: Resources,
-    private val blurConfig: BlurConfig,
+    blurConfig: BlurConfig,
     private val crossWindowBlurListeners: CrossWindowBlurListeners,
     dumpManager: DumpManager,
 ) : Dumpable {
     val minBlurRadius = resources.getDimensionPixelSize(R.dimen.min_window_blur_radius).toFloat()
-    val maxBlurRadius: Float
-        get() = blurConfig.maxBlurRadiusPx
-
-    val maxBlurRadiusFlow: Flow<Float> = blurConfig.maxBlurRadiusFlow
-
-    /** [maxBlurRadius], scaled down for the given display refresh rate. See
-     *  [BlurConfig.maxBlurRadiusPxForRefreshRate]. */
-    fun maxBlurRadiusForRefreshRate(refreshRateHz: Float): Float =
-        blurConfig.maxBlurRadiusPxForRefreshRate(refreshRateHz)
+    val maxBlurRadius =
+        if (Flags.notificationShadeBlur()) {
+            blurConfig.maxBlurRadiusPx
+        } else {
+            resources.getDimensionPixelSize(R.dimen.max_window_blur_radius).toFloat()
+        }
 
     private var lastAppliedBlur = 0
     private var lastTargetViewRootImpl: ViewRootImpl? = null

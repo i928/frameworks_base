@@ -41,10 +41,8 @@ import kotlinx.coroutines.flow.emptyFlow
 @SysUISingleton
 class AlternateBouncerToPrimaryBouncerTransitionViewModel
 @Inject
-constructor(
-    animationFlow: KeyguardTransitionAnimationFlow,
-    private val blurConfig: BlurConfig,
-) : DeviceEntryIconTransition, PrimaryBouncerTransition {
+constructor(animationFlow: KeyguardTransitionAnimationFlow, blurConfig: BlurConfig) :
+    DeviceEntryIconTransition, PrimaryBouncerTransition {
     private val transitionAnimation =
         animationFlow
             .setup(

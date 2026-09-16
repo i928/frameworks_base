@@ -135,7 +135,7 @@ constructor(
 
     private var isHomeFocused = true
 
-    val maxBlurRadiusPx get() = blurUtils.maxBlurRadius
+    val maxBlurRadiusPx = blurUtils.maxBlurRadius
 
     // Shade expansion offset that happens when pulling down on a HUN.
     var panelPullDownMinFraction = 0f
@@ -283,15 +283,6 @@ constructor(
 
         // Brightness slider removes blur
         shadeRadius *= (1 - brightnessMirrorSpring.ratio)
-
-        // Cap the visible blur radius to what's affordable at the shade's current refresh
-        // rate; the same radius that fits an 8.3ms (120Hz) budget from KawaseDualFilterV2/
-        // GlassBlurFilter costs identical GPU time regardless of Hz, so left unscaled this
-        // caused app-drawer-launch stutter on 120Hz panels.
-        val refreshRateCap =
-            root?.display?.refreshRate?.let { blurUtils.maxBlurRadiusForRefreshRate(it) }
-                ?: blurUtils.maxBlurRadius
-        shadeRadius = shadeRadius.coerceAtMost(refreshRateCap)
 
         var blur = shadeRadius.toInt()
 
@@ -511,11 +502,6 @@ constructor(
                     // Update wake and unlock radius only if the previous value comes from wake-up.
                     updateWakeBlurRadius(prevDozeAmount)
                 }
-            }
-        }
-        applicationScope.launch {
-            blurUtils.maxBlurRadiusFlow.collect {
-                scheduleUpdate()
             }
         }
         initBlurListeners()

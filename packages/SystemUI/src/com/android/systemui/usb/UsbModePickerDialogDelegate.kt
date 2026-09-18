@@ -103,7 +103,13 @@ class UsbModePickerDialogDelegate @Inject constructor(
                     val connected = intent.getBooleanExtra(UsbManager.USB_CONNECTED, false)
                     if (connected) {
                         val functions = resolveFunctions(intent)
-                        if (!shownForCurrentSession) {
+                        // Don't ask when the user already picked a default USB mode: that
+                        // default is applied automatically on unlock, so the picker would
+                        // fire on every connect -- including the connect a boot on a
+                        // charger produces -- to offer what is already in effect.
+                        val hasDefault =
+                            usbManager.screenUnlockedFunctions != UsbManager.FUNCTION_NONE
+                        if (!shownForCurrentSession && !hasDefault) {
                             shownForCurrentSession = true
                             if (keyguardStateController.isUnlocked) {
                                 showDialog(functions)
@@ -127,6 +133,13 @@ class UsbModePickerDialogDelegate @Inject constructor(
     }
 
     private fun showDialog(functions: Long) {
+        // Checked here rather than only where the broadcast arrives: on a boot with the
+        // cable attached, USB connects before the user unlocks, and UsbDeviceManager has
+        // not restored this user's screen-unlocked functions yet -- so the check would
+        // see FUNCTION_NONE, queue pendingShow, and the dialog would still appear after
+        // unlock to offer the default that is about to be applied anyway.
+        if (usbManager.screenUnlockedFunctions != UsbManager.FUNCTION_NONE) return
+
         currentDialog?.dismiss()
 
         val modes = buildModeList(functions)

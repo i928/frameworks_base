@@ -16385,8 +16385,12 @@ public class AudioService extends IAudioService.Stub
 
     private boolean isAudioPermissionUpdatesAddtionallyDelayed() {
         //  Additional delays on low core devices in order to optimize app launch latencies
-        return deferWearPermissionUpdates()
-            && mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WATCH);
+        //  i928: always. Every package-info cache invalidation re-checks all apps x 17
+        //  permissions 60 ms later; with ~740 packages this kept "audioserver_lifecycle"
+        //  at 27-37 s of CPU in the first 4.6 min after boot on sunfish. Use the
+        //  watch delay (500 ms) on phones too, so boot-time invalidation bursts collapse
+        //  into fewer passes. A grant reaches audioserver up to 0.5 s later.
+        return true;
     }
 
     //====================

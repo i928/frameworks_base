@@ -750,11 +750,14 @@ public class BatterySaverStateMachine {
                         && mBatteryLevel >= mSettingBatterySaverStickyAutoDisableThreshold;
                 final boolean isStickyDisabled =
                         mBatterySaverStickyBehaviourDisabled || !mSettingBatterySaverEnabledSticky;
-                if (isStickyDisabled || shouldTurnOffSticky) {
+                // Battery saver may stay on while plugged in, so a sticky battery saver is
+                // restored right away (e.g. after a reboot on the charger) instead of waiting
+                // for an unplug. The "turn off when charged" level only applies on battery.
+                if (isStickyDisabled || (shouldTurnOffSticky && !mIsPowered)) {
                     mState = STATE_OFF;
                     setStickyActive(false);
                     triggerStickyDisabledNotification();
-                } else if (!mIsPowered) {
+                } else {
                     // Re-enable BS.
                     enableBatterySaverLocked(/*enable*/ true, /*manual*/ true,
                             BatterySaverController.REASON_STICKY_RESTORE);

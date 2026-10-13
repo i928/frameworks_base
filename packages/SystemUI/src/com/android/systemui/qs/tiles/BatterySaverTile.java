@@ -149,8 +149,7 @@ public class BatterySaverTile extends SecureQSTile<BooleanState> implements
 
     @Override
     protected void handleUpdateState(BooleanState state, Object arg) {
-        state.state = mPluggedIn ? Tile.STATE_UNAVAILABLE
-                : mPowerSave ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE;
+        state.state = mPowerSave ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE;
         state.icon = maybeLoadResourceIcon(mPowerSave
                 ? R.drawable.qs_battery_saver_icon_on : R.drawable.qs_battery_saver_icon_off);
         state.label = mContext.getString(R.string.battery_detail_switch_title);

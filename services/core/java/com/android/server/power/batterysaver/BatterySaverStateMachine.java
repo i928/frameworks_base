@@ -640,17 +640,19 @@ public class BatterySaverStateMachine {
 
         switch (mState) {
             case STATE_OFF: {
-                if (!mIsPowered) {
-                    if (manual) {
-                        if (!enable) {
-                            Slog.e(TAG, "Tried to disable BS when it's already OFF");
-                            return;
-                        }
-                        enableBatterySaverLocked(/*enable*/ true, /*manual*/ true,
-                                BatterySaverController.REASON_MANUAL_ON);
-                        hideStickyDisabledNotification();
-                        mState = STATE_MANUAL_ON;
-                    } else if (isAutomaticModeActiveLocked() && isInAutomaticLowZoneLocked()) {
+                // Manual battery saver is allowed while plugged in; only the automatic modes
+                // wait for the device to be on battery.
+                if (manual) {
+                    if (!enable) {
+                        Slog.e(TAG, "Tried to disable BS when it's already OFF");
+                        return;
+                    }
+                    enableBatterySaverLocked(/*enable*/ true, /*manual*/ true,
+                            BatterySaverController.REASON_MANUAL_ON);
+                    hideStickyDisabledNotification();
+                    mState = STATE_MANUAL_ON;
+                } else if (!mIsPowered) {
+                    if (isAutomaticModeActiveLocked() && isInAutomaticLowZoneLocked()) {
                         enableBatterySaverLocked(/*enable*/ true, /*manual*/ false,
                                 BatterySaverController.REASON_PERCENTAGE_AUTOMATIC_ON);
                         hideStickyDisabledNotification();
@@ -674,16 +676,8 @@ public class BatterySaverStateMachine {
                     enableBatterySaverLocked(/*enable*/ false, /*manual*/ true,
                             BatterySaverController.REASON_MANUAL_OFF);
                     mState = STATE_OFF;
-                } else if (mIsPowered) {
-                    enableBatterySaverLocked(/*enable*/ false, /*manual*/ false,
-                            BatterySaverController.REASON_PLUGGED_IN);
-                    if (mSettingBatterySaverEnabledSticky
-                            && !mBatterySaverStickyBehaviourDisabled) {
-                        mState = STATE_PENDING_STICKY_ON;
-                    } else {
-                        mState = STATE_OFF;
-                    }
                 }
+                // Plugging in no longer turns a manually enabled battery saver off.
                 break;
             }
 
@@ -741,9 +735,15 @@ public class BatterySaverStateMachine {
 
             case STATE_PENDING_STICKY_ON: {
                 if (manual) {
-                    // This shouldn't be possible. We'll only be in this state when the device is
-                    // plugged in, so the user shouldn't be able to manually change state.
-                    Slog.e(TAG, "Tried to manually change BS state from PENDING_STICKY_ON");
+                    // Battery saver can be toggled while plugged in, so honour the request.
+                    if (enable) {
+                        enableBatterySaverLocked(/*enable*/ true, /*manual*/ true,
+                                BatterySaverController.REASON_MANUAL_ON);
+                        mState = STATE_MANUAL_ON;
+                    } else {
+                        setStickyActive(false);
+                        mState = STATE_OFF;
+                    }
                     return;
                 }
                 final boolean shouldTurnOffSticky = mSettingBatterySaverStickyAutoDisableEnabled
@@ -815,10 +815,6 @@ public class BatterySaverStateMachine {
             if (DEBUG) {
                 Slog.d(TAG, "Already " + (enable ? "enabled" : "disabled"));
             }
-            return;
-        }
-        if (enable && mIsPowered) {
-            if (DEBUG) Slog.d(TAG, "Can't enable: isPowered");
             return;
         }
         mLastChangedIntReason = intReason;

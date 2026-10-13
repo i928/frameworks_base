@@ -248,6 +248,10 @@ public class Utils {
         private static int mZenState;
 
         private static final String TAG = "SleepModeController";
+        // What Sleep Mode turned off, kept across reboots: "wifi,cellular,bluetooth,ringer,zen".
+        // The fields above are in-memory only, so a reboot inside the sleep window used to
+        // record the already-disabled radios and leave them off when Sleep Mode ended.
+        private static final String SLEEP_MODE_SAVED_STATE = "sleep_mode_saved_state";
         private static final int SLEEP_NOTIFICATION_ID = 727;
         public static final String SLEEP_MODE_TURN_OFF = "android.intent.action.SLEEP_MODE_TURN_OFF";
 
@@ -396,14 +400,48 @@ public class Utils {
             }
         }
 
+        private void saveState() {
+            Settings.Secure.putStringForUser(mContext.getContentResolver(), SLEEP_MODE_SAVED_STATE,
+                    mWifiState + "," + mCellularState + "," + mBluetoothState + ","
+                    + mRingerState + "," + mZenState, UserHandle.USER_CURRENT);
+        }
+
+        /** @return true if a state saved by an earlier {@link #enable()} was loaded. */
+        private boolean loadState() {
+            final String saved = Settings.Secure.getStringForUser(mContext.getContentResolver(),
+                    SLEEP_MODE_SAVED_STATE, UserHandle.USER_CURRENT);
+            if (saved == null || saved.isEmpty()) return false;
+            try {
+                final String[] v = saved.split(",");
+                mWifiState = Boolean.parseBoolean(v[0]);
+                mCellularState = Boolean.parseBoolean(v[1]);
+                mBluetoothState = Boolean.parseBoolean(v[2]);
+                mRingerState = Integer.parseInt(v[3]);
+                mZenState = Integer.parseInt(v[4]);
+                return true;
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Ignoring bad " + SLEEP_MODE_SAVED_STATE + ": " + saved);
+                return false;
+            }
+        }
+
+        private void clearState() {
+            Settings.Secure.putStringForUser(mContext.getContentResolver(), SLEEP_MODE_SAVED_STATE,
+                    null, UserHandle.USER_CURRENT);
+        }
+
         private void enable() {
             if (!ActivityManager.isSystemReady()) return;
+
+            // Re-enabled after a reboot inside the sleep window: keep what was saved before the
+            // reboot instead of recording the radios this mode already turned off.
+            final boolean restored = loadState();
 
             // Disable Wi-Fi
             final boolean disableWifi = Settings.Secure.getIntForUser(mContext.getContentResolver(),
                     Settings.Secure.SLEEP_MODE_WIFI_TOGGLE, 1, UserHandle.USER_CURRENT) == 1;
             if (disableWifi) {
-                mWifiState = isWifiEnabled();
+                if (!restored) mWifiState = isWifiEnabled();
                 setWifiEnabled(false);
             }
 
@@ -411,7 +449,7 @@ public class Utils {
             final boolean disableBluetooth = Settings.Secure.getIntForUser(mContext.getContentResolver(),
                     Settings.Secure.SLEEP_MODE_BLUETOOTH_TOGGLE, 1, UserHandle.USER_CURRENT) == 1;
             if (disableBluetooth) {
-                mBluetoothState = isBluetoothEnabled();
+                if (!restored) mBluetoothState = isBluetoothEnabled();
                 setBluetoothEnabled(false);
             }
 
@@ -419,7 +457,7 @@ public class Utils {
             final boolean disableData = Settings.Secure.getIntForUser(mContext.getContentResolver(),
                     Settings.Secure.SLEEP_MODE_CELLULAR_TOGGLE, 1, UserHandle.USER_CURRENT) == 1;
             if (disableData) {
-                mCellularState = getTelephonyManager().isDataEnabled();
+                if (!restored) mCellularState = getTelephonyManager().isDataEnabled();
                 getTelephonyManager().setDataEnabled(false);
             }
 
@@ -434,8 +472,10 @@ public class Utils {
             final int ringerMode = Settings.Secure.getIntForUser(mContext.getContentResolver(),
                     Settings.Secure.SLEEP_MODE_RINGER_MODE, 0, UserHandle.USER_CURRENT);
             if (ringerMode != 0) {
-                mRingerState = getRingerModeInternal();
-                mZenState = getZenMode();
+                if (!restored) {
+                    mRingerState = getRingerModeInternal();
+                    mZenState = getZenMode();
+                }
                 if (ringerMode == 1) {
                     setRingerModeInternal(AudioManager.RINGER_MODE_VIBRATE);
                     setZenMode(ZEN_MODE_OFF);
@@ -448,12 +488,17 @@ public class Utils {
                 }
             }
 
+            if (!restored) saveState();
+
             showToast(mResources.getString(R.string.sleep_mode_enabled_toast), Toast.LENGTH_LONG);
             addNotification();
         }
 
         private void disable() {
             if (!ActivityManager.isSystemReady()) return;
+
+            // After a reboot the in-memory fields are defaults; use the saved state.
+            loadState();
 
             // Enable Wi-Fi
             final boolean disableWifi = Settings.Secure.getIntForUser(mContext.getContentResolver(),
@@ -497,6 +542,8 @@ public class Utils {
                 setRingerModeInternal(mRingerState);
                 setZenMode(mZenState);
             }
+
+            clearState();
 
             showToast(mResources.getString(R.string.sleep_mode_disabled_toast), Toast.LENGTH_LONG);
             mNotificationManager.cancel(SLEEP_NOTIFICATION_ID);

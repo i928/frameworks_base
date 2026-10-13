@@ -4486,7 +4486,7 @@ public final class PowerManagerService extends SystemService
             if (DEBUG) {
                 Slog.d(TAG, "setLowPowerModeInternal " + enabled + " mIsPowered=" + mIsPowered);
             }
-            if (mIsPowered || !mBatterySaverSupported) {
+            if (!mBatterySaverSupported) {
                 return false;
             }
 

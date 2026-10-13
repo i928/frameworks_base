@@ -44,11 +44,8 @@ constructor(
             icon = Icon.Loaded(resources.getDrawable(iconRes, theme), null, iconRes)
             sideViewIcon = QSTileState.SideViewIcon.None
 
-            if (data.isPluggedIn) {
-                activationState = QSTileState.ActivationState.UNAVAILABLE
-                supportedActions = setOf(QSTileState.UserAction.LONG_CLICK)
-                secondaryLabel = ""
-            } else if (data.isPowerSaving) {
+            // Battery saver can be toggled while plugged in.
+            if (data.isPowerSaving) {
                 activationState = QSTileState.ActivationState.ACTIVE
                 supportedActions =
                     setOf(QSTileState.UserAction.CLICK, QSTileState.UserAction.LONG_CLICK)

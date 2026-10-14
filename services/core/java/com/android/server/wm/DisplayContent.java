@@ -105,6 +105,7 @@ import static android.view.WindowManager.LayoutParams.TYPE_BOOT_PROGRESS;
 import static android.view.WindowManager.LayoutParams.TYPE_INPUT_METHOD;
 import static android.view.WindowManager.LayoutParams.TYPE_INPUT_METHOD_DIALOG;
 import static android.view.WindowManager.LayoutParams.TYPE_NAVIGATION_BAR;
+import static android.view.WindowManager.LayoutParams.TYPE_NAVIGATION_BAR_PANEL;
 import static android.view.WindowManager.LayoutParams.TYPE_NOTIFICATION_SHADE;
 import static android.view.WindowManager.LayoutParams.TYPE_SYSTEM_DIALOG;
 import static android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ERROR;
@@ -5085,7 +5086,10 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
         final WindowState visibleNotDrawnWindow = getWindow(w -> {
             final boolean isVisible = w.isVisible() && !w.mObscured;
             final boolean isDrawn = w.isDrawn();
-            if (isVisible && !isDrawn) {
+            // SystemUI's screen decoration overlays (rounded corners, cutout) are drawn late when
+            // the device is busy at boot; they need not hold the boot animation hand-off, which
+            // also holds the user unlock and the launcher's first frame with icons.
+            if (isVisible && !isDrawn && w.mAttrs.type != TYPE_NAVIGATION_BAR_PANEL) {
                 ProtoLog.d(WM_DEBUG_BOOT,
                         "DisplayContent: boot is waiting for window of type %d to be drawn",
                         w.mAttrs.type);

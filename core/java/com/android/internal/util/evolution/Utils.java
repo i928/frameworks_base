@@ -439,7 +439,7 @@ public class Utils {
 
             // Disable Wi-Fi
             final boolean disableWifi = Settings.Secure.getIntForUser(mContext.getContentResolver(),
-                    Settings.Secure.SLEEP_MODE_WIFI_TOGGLE, 1, UserHandle.USER_CURRENT) == 1;
+                    Settings.Secure.SLEEP_MODE_WIFI_TOGGLE, 0, UserHandle.USER_CURRENT) == 1;
             if (disableWifi) {
                 if (!restored) mWifiState = isWifiEnabled();
                 setWifiEnabled(false);
@@ -502,7 +502,7 @@ public class Utils {
 
             // Enable Wi-Fi
             final boolean disableWifi = Settings.Secure.getIntForUser(mContext.getContentResolver(),
-                    Settings.Secure.SLEEP_MODE_WIFI_TOGGLE, 1, UserHandle.USER_CURRENT) == 1;
+                    Settings.Secure.SLEEP_MODE_WIFI_TOGGLE, 0, UserHandle.USER_CURRENT) == 1;
             if (disableWifi && mWifiState != isWifiEnabled()) {
                 setWifiEnabled(mWifiState);
             }

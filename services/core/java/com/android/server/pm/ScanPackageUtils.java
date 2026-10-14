@@ -154,6 +154,14 @@ final class ScanPackageUtils {
         String primaryCpuAbiFromSettings = null;
         String secondaryCpuAbiFromSettings = null;
         boolean needToDeriveAbi = (scanFlags & SCAN_FIRST_BOOT_OR_UPGRADE) != 0;
+        // An OTA can't change the native code of an unchanged /data app, so keep the ABI from
+        // settings instead of re-opening every APK (~20 s for 246 apps on crosshatch).
+        if (needToDeriveAbi && pkgSetting != null && !pkgSetting.isSystem()
+                && !pkgSetting.isUpdatedSystemApp()
+                && pkgSetting.getPathString().equals(parsedPackage.getPath())
+                && pkgSetting.getLastModifiedTime() == getLastModifiedTime(parsedPackage)) {
+            needToDeriveAbi = false;
+        }
         boolean isApex = (scanFlags & SCAN_AS_APEX) != 0;
 
         if (!needToDeriveAbi) {

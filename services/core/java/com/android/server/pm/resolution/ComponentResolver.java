@@ -73,6 +73,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -1257,8 +1258,12 @@ public class ComponentResolver extends ComponentResolverLocked implements
         // protected because it is accessed directly from ComponentResolver.  That works
         // even if the attribute is private, but fails for subclasses of
         // ActivityIntentResolver.
-        protected final ArrayMap<ComponentName, ParsedActivity> mActivities =
-                new ArrayMap<>();
+        // HashMap, not ArrayMap: every activity on the device is inserted at boot, and
+        // ArrayMap.put shifts its sorted arrays on each insert (quadratic; ~1 s of
+        // System.arraycopy on the system_server main thread with ~800 packages). Only
+        // get/put/remove/putAll are used, never index access.
+        protected final HashMap<ComponentName, ParsedActivity> mActivities =
+                new HashMap<>();
     }
 
     // Both receivers and activities share a class, but point to different get methods

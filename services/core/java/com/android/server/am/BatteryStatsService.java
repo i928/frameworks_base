@@ -567,8 +567,13 @@ public final class BatteryStatsService extends IBatteryStats.Stub
      */
     public void onSystemReady() {
         mStats.onSystemReady(mContext);
-        mPowerStatsScheduler.start();
+        // The first aggregation pass catches up every hourly span since the last saved one
+        // (several CPU-seconds of battery history reads on older phones). Run it after boot
+        // settles instead of during the user unlock and launcher start.
+        mHandler.postDelayed(mPowerStatsScheduler::start, POWER_STATS_START_DELAY_MS);
     }
+
+    private static final long POWER_STATS_START_DELAY_MS = 2 * 60 * 1000;
 
     private final class LocalService extends BatteryStatsInternal {
         @Override

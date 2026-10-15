@@ -22,6 +22,8 @@ import android.provider.Settings;
 import android.util.Log;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -70,6 +72,11 @@ public final class DeviceConfigUtils {
         if (!sEnableDeviceConfigUtils) return;
 
         logd("setDefaultProperties");
+        // Group by namespace, read each namespace's current values in one call and write only
+        // what differs. This runs on the system_server main thread at boot: writing all ~220
+        // overrides one by one (each putString also re-scans the whole override list in
+        // shouldDenyDeviceConfigControl) cost ~0.1 s per pass although nothing had changed.
+        final Map<String, Map<String, String>> byNamespace = new LinkedHashMap<>();
         for (String p : getDeviceConfigsOverride()) {
             String[] kv = p.split("=");
             String fullKey = kv[0];
@@ -90,7 +97,23 @@ public final class DeviceConfigUtils {
             if (kv.length > 1) {
                 value = kv[1];
             }
-            Settings.Config.putString(namespace, key, value, false);
+            byNamespace.computeIfAbsent(namespace, n -> new LinkedHashMap<>()).put(key, value);
+        }
+        for (Map.Entry<String, Map<String, String>> ns : byNamespace.entrySet()) {
+            final String namespace = ns.getKey();
+            final Map<String, String> wanted = ns.getValue();
+            Map<String, String> current;
+            try {
+                current = Settings.Config.getStrings(namespace, new ArrayList<>(wanted.keySet()));
+            } catch (RuntimeException e) {
+                current = null;
+            }
+            for (Map.Entry<String, String> e : wanted.entrySet()) {
+                if (current != null && e.getValue().equals(current.get(e.getKey()))) {
+                    continue;
+                }
+                Settings.Config.putString(namespace, e.getKey(), e.getValue(), false);
+            }
         }
     }
 

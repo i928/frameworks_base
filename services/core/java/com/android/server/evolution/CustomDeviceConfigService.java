@@ -8,6 +8,7 @@ package com.android.server.evolution;
 import android.content.Context;
 import com.android.server.SystemService;
 
+import com.android.internal.os.BackgroundThread;
 import com.android.internal.util.evolution.DeviceConfigUtils;
 
 public class CustomDeviceConfigService extends SystemService {
@@ -29,7 +30,9 @@ public class CustomDeviceConfigService extends SystemService {
     @Override
     public void onBootPhase(int phase) {
         if (phase == PHASE_BOOT_COMPLETED) {
-            DeviceConfigUtils.setDefaultProperties(null, null);
+            // Re-apply in case something reset them during boot; not on the main thread.
+            BackgroundThread.getHandler().post(
+                    () -> DeviceConfigUtils.setDefaultProperties(null, null));
         }
     }
 }

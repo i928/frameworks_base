@@ -17,6 +17,7 @@
 package com.android.internal.util.evolution;
 
 import android.app.ActivityManager;
+import android.app.AlarmManager;
 import android.app.ActivityThread;
 import android.app.IActivityManager;
 import android.app.Notification;
@@ -24,10 +25,12 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.role.RoleManager;
 import android.bluetooth.BluetoothAdapter;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.om.OverlayManager;
 import android.content.om.OverlayManagerTransaction;
 import android.content.om.OverlayIdentifier;
@@ -47,6 +50,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
+import android.os.BatteryManager;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.ServiceManager;
@@ -255,6 +259,127 @@ public class Utils {
         private static final int SLEEP_NOTIFICATION_ID = 727;
         public static final String SLEEP_MODE_TURN_OFF = "android.intent.action.SLEEP_MODE_TURN_OFF";
 
+        // Wi-Fi during Sleep Mode follows use instead of staying off all night: off while the
+        // screen is off on battery, back on as soon as the phone is used or charging, and off
+        // again WIFI_OFF_DELAY_MS after the screen goes off (quick glances don't bounce it).
+        // Only applies when Wi-Fi was on when Sleep Mode started; a manual Wi-Fi change during
+        // sleep hands control back to the user until Sleep Mode ends.
+        private static final long WIFI_OFF_DELAY_MS = 5 * 60 * 1000;
+        private static final String WIFI_OFF_ALARM_TAG = "SleepModeWifiOff";
+        private final Handler mHandler = new Handler(Looper.getMainLooper());
+        private boolean mWifiManaged;
+        private boolean mWifiUserOverride;
+        private boolean mWifiOffPending;
+        // State we last asked for and haven't seen confirmed yet; null when idle.
+        private Boolean mWifiRequested;
+
+        private final AlarmManager.OnAlarmListener mWifiOffAlarm = () -> {
+            mWifiOffPending = false;
+            if (mWifiManaged && !mWifiUserOverride && !isInUse()) {
+                setManagedWifi(false);
+            }
+        };
+
+        private final BroadcastReceiver mWifiPolicyReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (WifiManager.WIFI_STATE_CHANGED_ACTION.equals(intent.getAction())) {
+                    onWifiStateChanged(intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE,
+                            WifiManager.WIFI_STATE_UNKNOWN));
+                } else {
+                    updateManagedWifi();
+                }
+            }
+        };
+
+        private boolean isInUse() {
+            final PowerManager pm = mContext.getSystemService(PowerManager.class);
+            if (pm != null && pm.isInteractive()) return true;
+            final Intent battery = mContext.registerReceiver(null,
+                    new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            return battery != null && battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0;
+        }
+
+        private void setManagedWifi(boolean enable) {
+            if (isWifiEnabled() == enable) return;
+            mWifiRequested = enable;
+            setWifiEnabled(enable);
+        }
+
+        private void onWifiStateChanged(int state) {
+            if (!mWifiManaged) return;
+            final boolean on;
+            if (state == WifiManager.WIFI_STATE_ENABLED) {
+                on = true;
+            } else if (state == WifiManager.WIFI_STATE_DISABLED) {
+                on = false;
+            } else {
+                return;
+            }
+            if (mWifiRequested != null && mWifiRequested == on) {
+                mWifiRequested = null;
+                return;
+            }
+            // Not our request: the user (or airplane mode etc.) changed Wi-Fi.
+            Log.i(TAG, "Wi-Fi changed by the user during Sleep Mode, leaving it alone");
+            mWifiUserOverride = true;
+            cancelWifiOff();
+        }
+
+        private void updateManagedWifi() {
+            if (!mWifiManaged || mWifiUserOverride) return;
+            if (isInUse()) {
+                cancelWifiOff();
+                setManagedWifi(true);
+            } else if (isWifiEnabled() && !mWifiOffPending) {
+                final AlarmManager am = mContext.getSystemService(AlarmManager.class);
+                if (am == null) {
+                    setManagedWifi(false);
+                    return;
+                }
+                mWifiOffPending = true;
+                am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        SystemClock.elapsedRealtime() + WIFI_OFF_DELAY_MS,
+                        WIFI_OFF_ALARM_TAG, mHandler::post, null, mWifiOffAlarm);
+            }
+        }
+
+        private void cancelWifiOff() {
+            if (!mWifiOffPending) return;
+            mWifiOffPending = false;
+            final AlarmManager am = mContext.getSystemService(AlarmManager.class);
+            if (am != null) am.cancel(mWifiOffAlarm);
+        }
+
+        private void startManagingWifi() {
+            mWifiManaged = true;
+            mWifiUserOverride = false;
+            mWifiRequested = null;
+            final IntentFilter filter = new IntentFilter();
+            filter.addAction(Intent.ACTION_SCREEN_ON);
+            filter.addAction(Intent.ACTION_SCREEN_OFF);
+            filter.addAction(Intent.ACTION_POWER_CONNECTED);
+            filter.addAction(Intent.ACTION_POWER_DISCONNECTED);
+            filter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);
+            mContext.registerReceiver(mWifiPolicyReceiver, filter, null, mHandler,
+                    Context.RECEIVER_EXPORTED);
+            // Screen off on battery when Sleep Mode starts: off right away, as before.
+            if (!isInUse()) {
+                setManagedWifi(false);
+            }
+        }
+
+        private void stopManagingWifi() {
+            if (!mWifiManaged) return;
+            mWifiManaged = false;
+            cancelWifiOff();
+            try {
+                mContext.unregisterReceiver(mWifiPolicyReceiver);
+            } catch (IllegalArgumentException e) {
+                // not registered
+            }
+        }
+
         public SleepModeController(Context context) {
             mContext = context;
             mUiContext = ActivityThread.currentActivityThread().getSystemUiContext();
@@ -442,7 +567,9 @@ public class Utils {
                     Settings.Secure.SLEEP_MODE_WIFI_TOGGLE, 0, UserHandle.USER_CURRENT) == 1;
             if (disableWifi) {
                 if (!restored) mWifiState = isWifiEnabled();
-                setWifiEnabled(false);
+                if (mWifiState) {
+                    startManagingWifi();
+                }
             }
 
             // Disable Bluetooth
@@ -503,7 +630,9 @@ public class Utils {
             // Enable Wi-Fi
             final boolean disableWifi = Settings.Secure.getIntForUser(mContext.getContentResolver(),
                     Settings.Secure.SLEEP_MODE_WIFI_TOGGLE, 0, UserHandle.USER_CURRENT) == 1;
-            if (disableWifi && mWifiState != isWifiEnabled()) {
+            final boolean userChangedWifi = mWifiUserOverride;
+            stopManagingWifi();
+            if (disableWifi && !userChangedWifi && mWifiState != isWifiEnabled()) {
                 setWifiEnabled(mWifiState);
             }
 

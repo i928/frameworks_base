@@ -541,8 +541,11 @@ final class InstallPackageHelper {
         }
 
         // writer
+        // commitSharedLibraryChanges() returns null right away without libraries; don't copy
+        // every installed package into getCombinedAvailablePackages() for nothing.
         ArrayList<AndroidPackage> clientLibPkgs =
-                mSharedLibraries.commitSharedLibraryChanges(pkg, pkgSetting,
+                ArrayUtils.isEmpty(reconciledPkg.mAllowedSharedLibraryInfos) ? null
+                : mSharedLibraries.commitSharedLibraryChanges(pkg, pkgSetting,
                         reconciledPkg.mAllowedSharedLibraryInfos,
                         reconciledPkg.getCombinedAvailablePackages(), scanFlags);
 
